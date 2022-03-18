@@ -212,12 +212,20 @@ class AlgoHandler {
 
     // Send the message with AlgoSigner
     // TODO -----------------------------------------------------------------------------
-    let binarySignedTx = window.AlgoSigner.encoding.base64ToMsgpack(signedTxs[0].blob); //convert or not? 
-    await this.algodClient.sendRawTransaction(binarySignedTx).do();
-  //   await window.AlgoSigner.send({
-  //     ledger: LEDGER_NAME,
-  //     tx: signedTxs,
-  // });
+    // let binarySignedTx = window.AlgoSigner.encoding.base64ToMsgpack(signedTxs[0].blob); //convert or not? 
+    // await this.algodClient.sendRawTransaction(binarySignedTx).do();
+    // let signedTx1Binary = window.AlgoSigner.encoding.base64ToMsgpack(signedTxs[0].blob);
+    // let combinedBinaryTxns = new Uint8Array(signedTx1Binary.byteLength + signedTx2Binary.byteLength);
+    // combinedBinaryTxns.set(signedTx1Binary, 0);
+    // combinedBinaryTxns.set(signedTx2Binary, signedTx1Binary.byteLength);
+
+// Convert the combined array values back to base64
+    // let combinedBase64Txns = AlgoSigner.encoding.msgpackToBase64(combinedBinaryTxns);
+
+    await window.AlgoSigner.send({
+      ledger: 'TestNet',
+      tx: signedTxs[0].blob,
+    });
   }
 
   /** 
@@ -260,8 +268,8 @@ class AlgoHandler {
     // TODO -----------------------------------------------------------------------------
     let method_identifier = "update_user_status"
     let app_args = [
-      new Uint8Array(method_identifier),
-      new Uint8Array(algosdk.decodeAddress(userAddress)),
+      new Uint8Array(Buffer.from(method_identifier)),
+      algosdk.decodeAddress(userAddress).publicKey,
       new Uint8Array(Buffer.from(yesOrNo))
     ]
     // Create the transaction with proper app argument array
@@ -290,7 +298,7 @@ class AlgoHandler {
     let params = await this.algodClient.getTransactionParams().do();
     let method_identifier = "vote"
     let app_args = [
-      new Uint8Array(method_identifier),
+      new Uint8Array(Buffer.from(method_identifier)),
       algosdk.encodeUint64(optionIndex)
     ]
     let txn = algosdk.makeApplicationNoOpTxn(address, params, appID, app_args) //CHECK SHOULD I USE NOOP
@@ -306,8 +314,7 @@ class AlgoHandler {
   async closeOut(address, appID) {
     // TODO -----------------------------------------------------------------------------
     let params = await this.algodClient.getTransactionParams().do();
-    let app_args = []
-    let txn = algosdk.makeApplicationNoOpTxn(address, params, appID, app_args)
+    let txn = algosdk.makeApplicationCloseOutTxn(address, params, appID)
     this.signAndSend(txn)
   }
 
@@ -320,8 +327,7 @@ class AlgoHandler {
   async clearState(address, appID) {
     // TODO -----------------------------------------------------------------------------
     let params = await this.algodClient.getTransactionParams().do();
-    let app_args = []
-    let txn = algosdk.makeApplicationNoOpTxn(address, params, appID, app_args)
+    let txn = algosdk.makeApplicationClearStateTxn(address, params, appID)
     this.signAndSend(txn)
   }
 }
