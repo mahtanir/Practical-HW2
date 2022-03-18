@@ -6,9 +6,9 @@ import base64
 import unittest
 import time
 
+from algosdk import account, mnemonic
 from algosdk.encoding import decode_address, encode_address
 from algosdk.future import transaction
-from algosdk import account, mnemonic
 from algosdk.v2client import algod
 from pyteal import compileTeal, Mode
 from election_smart_contract import approval_program, clear_state_program
@@ -17,21 +17,27 @@ from election_smart_contract import approval_program, clear_state_program
 from secrets import account_mnemonics, algod_headers, algod_address
 
 from deploy import create_app
-from helper import compile_program, wait_for_confirmation, int_to_bytes, read_global_state, read_local_state
+from helper import (
+    compile_program,
+    wait_for_confirmation,
+    int_to_bytes,
+    read_global_state,
+    read_local_state,
+)
 
 account_private_keys = [mnemonic.to_private_key(mn) for mn in account_mnemonics]
-account_addresses = [account.address_from_private_key(sk) for sk in account_private_keys]
+account_addresses = [
+    account.address_from_private_key(sk) for sk in account_private_keys
+]
 
 # algod client
 client = algod.AlgodClient(
-    algod_token="",
-    algod_address=algod_address,
-    headers=algod_headers
+    algod_token="", algod_address=algod_address, headers=algod_headers
 )
 
 
 def opt_in_app(client, private_key, index):
-    """ OPT IN TO APPLICATION """
+    """OPT IN TO APPLICATION"""
 
     # declare sender
     sender = account.address_from_private_key(private_key)
@@ -61,8 +67,10 @@ def opt_in_app(client, private_key, index):
     print("OptIn to app-id:", transaction_response["txn"]["txn"]["apid"])
 
 
-def call_app_approve_voter(client, index, creator_private_key, user_address, yes_or_no_bytes):
-    """ CREATOR TO APPROVE VOTER """
+def call_app_approve_voter(
+    client, index, creator_private_key, user_address, yes_or_no_bytes
+):
+    """CREATOR TO APPROVE VOTER"""
 
     app_args = [b"update_user_status", decode_address(user_address), yes_or_no_bytes]
     # declare sender
@@ -74,7 +82,9 @@ def call_app_approve_voter(client, index, creator_private_key, user_address, yes
     params = client.suggested_params()
 
     # create unsigned transaction
-    txn = transaction.ApplicationNoOpTxn(sender, params, index, app_args, accounts=[sender, user_address])
+    txn = transaction.ApplicationNoOpTxn(
+        sender, params, index, app_args, accounts=[sender, user_address]
+    )
 
     # sign transaction
     signed_txn = txn.sign(creator_private_key)
@@ -86,11 +96,18 @@ def call_app_approve_voter(client, index, creator_private_key, user_address, yes
     # await confirmation
     wait_for_confirmation(client, tx_id)
     transaction_response = client.pending_transaction_info(tx_id)
-    print("Approved user ", user_address, "for apid ", transaction_response, ": ", yes_or_no_bytes)
+    print(
+        "Approved user ",
+        user_address,
+        "for apid ",
+        transaction_response,
+        ": ",
+        yes_or_no_bytes,
+    )
 
 
 def call_app(client, private_key, index, app_args):
-    """ CALL APPLICATION """
+    """CALL APPLICATION"""
 
     # declare sender
     sender = account.address_from_private_key(private_key)
@@ -117,7 +134,7 @@ def call_app(client, private_key, index, app_args):
 
 
 def delete_app(client, private_key, index):
-    """ DELETE APPLICATION """
+    """DELETE APPLICATION"""
 
     # declare sender
     sender = account.address_from_private_key(private_key)
@@ -147,7 +164,7 @@ def delete_app(client, private_key, index):
 
 
 def close_out_app(client, private_key, index):
-    """ CLOSE OUT FROM APPLICATION """
+    """CLOSE OUT FROM APPLICATION"""
 
     # declare sender
     sender = account.address_from_private_key(private_key)
@@ -177,7 +194,7 @@ def close_out_app(client, private_key, index):
 
 
 def clear_state_app(client, private_key, index):
-    """ CLEAR STATE OF APPLICATION """
+    """CLEAR STATE OF APPLICATION"""
 
     # declare sender
     sender = account.address_from_private_key(private_key)
@@ -234,8 +251,10 @@ def clear_app(client, private_key, index):
     print("Cleared app-id:", transaction_response["txn"]["txn"]["apid"])
 
 
-def test_create_app(client, creator_private_key, election_end, num_vote_options, vote_options):
-    """ TEST CREATION OF APPLICATION """
+def test_create_app(
+    client, creator_private_key, election_end, num_vote_options, vote_options
+):
+    """TEST CREATION OF APPLICATION"""
 
     # declare application state storage (immutable)
     local_ints = 1  # user's voted variable
@@ -263,15 +282,13 @@ def test_create_app(client, creator_private_key, election_end, num_vote_options,
         clear_state_program_ast, mode=Mode.Application, version=5
     )
     # compile program to binary
-    clear_state_program_compiled = compile_program(
-        client, clear_state_program_teal
-    )
+    clear_state_program_compiled = compile_program(client, clear_state_program_teal)
 
     # create list of bytes for app args
     app_args = [
         int_to_bytes(election_end),
         int_to_bytes(num_vote_options),
-        vote_options
+        vote_options,
     ]
 
     # create new application
@@ -289,10 +306,10 @@ def test_create_app(client, creator_private_key, election_end, num_vote_options,
 
 
 class TestSimpleElection(unittest.TestCase):
-    """ PROVIDE TESTS FOR BASIC FUNCTIONALITIES """
+    """PROVIDE TESTS FOR BASIC FUNCTIONALITIES"""
 
     def test_01_create_election(self):
-        """ tests the creation and initial variable setup """
+        """tests the creation and initial variable setup"""
 
         print(f"Testing election deployment/creation")
 
@@ -304,33 +321,56 @@ class TestSimpleElection(unittest.TestCase):
         vote_options = "ETH,ALGO"
 
         # test smart contract creation with large election end time
-        TestSimpleElection.app_id = test_create_app(client, account_private_keys[0], election_end, num_vote_options,
-                                                    vote_options)
+        TestSimpleElection.app_id = test_create_app(
+            client,
+            account_private_keys[0],
+            election_end,
+            num_vote_options,
+            vote_options,
+        )
         time.sleep(1.5)
 
         # check global variables setup
         global_state = read_global_state(client, TestSimpleElection.app_id)
-        self.assertEqual(global_state["VoteOptions"], vote_options, "VoteOptions variable is NOT correct")
-        self.assertEqual(global_state["ElectionEnd"], election_end, "ElectionEnd variable is NOT correct")
+        self.assertEqual(
+            global_state["VoteOptions"],
+            vote_options,
+            "VoteOptions variable is NOT correct",
+        )
+        self.assertEqual(
+            global_state["ElectionEnd"],
+            election_end,
+            "ElectionEnd variable is NOT correct",
+        )
         for i in range(0, 2):
-            self.assertEqual(global_state[f"VotesFor{i}"], 0, f"VotesFor{i} not initialized to 0")
+            self.assertEqual(
+                global_state[f"VotesFor{i}"], 0, f"VotesFor{i} not initialized to 0"
+            )
 
     def test_02_opt_in(self):
-        """ tests two users opting in to contract """
+        """tests two users opting in to contract"""
 
         # opt-in three users
         for i in range(0, 3):
             print(f"Testing account {account_addresses[i]} opt-in")
 
             opt_in_app(client, account_private_keys[i], TestSimpleElection.app_id)
-            local_state = read_local_state(client, account_addresses[i], TestSimpleElection.app_id)
-            self.assertEqual("maybe", local_state["can_vote"], f"User {i}'s can_vote not set to 'maybe'")
+            local_state = read_local_state(
+                client, account_addresses[i], TestSimpleElection.app_id
+            )
+            self.assertEqual(
+                "maybe",
+                local_state["can_vote"],
+                f"User {i}'s can_vote not set to 'maybe'",
+            )
             time.sleep(0.5)
 
-            print("-------------------------------------------------------------------------------")
+            print(
+                "-------------------------------------------------------------------------------"
+            )
 
     def test_03_approve_users(self):
-        """ tests the "yes" approval of two users """
+        """tests the "yes" approval of two users"""
 
         # approve the first two users
         for i in range(0, 2):
@@ -342,30 +382,44 @@ class TestSimpleElection(unittest.TestCase):
                 index=TestSimpleElection.app_id,
                 creator_private_key=account_private_keys[0],
                 user_address=account_addresses[i],
-                yes_or_no_bytes=b"yes"
+                yes_or_no_bytes=b"yes",
             )
             time.sleep(1)
 
             # check local state of the user that was approved to ensure it was updated correctly
-            local_state = read_local_state(client, account_addresses[i], TestSimpleElection.app_id)
-            self.assertEqual("yes", local_state["can_vote"], f"Approved user's can_vote should be 'yes'!")
+            local_state = read_local_state(
+                client, account_addresses[i], TestSimpleElection.app_id
+            )
+            self.assertEqual(
+                "yes",
+                local_state["can_vote"],
+                f"Approved user's can_vote should be 'yes'!",
+            )
 
-            print("-------------------------------------------------------------------------------")
+            print(
+                "-------------------------------------------------------------------------------"
+            )
 
     def test_04_voting(self):
-        """ tests approved users trying to vote """
+        """tests approved users trying to vote"""
 
         for i in range(0, 2):
             print(f"Testing account {account_addresses[i]} voting for option {i}")
 
             # have user i vote for option i
-            app_args = [b"vote", i.to_bytes(8, 'big')]
-            call_app(client, account_private_keys[i], TestSimpleElection.app_id, app_args)
+            app_args = [b"vote", i.to_bytes(8, "big")]
+            call_app(
+                client, account_private_keys[i], TestSimpleElection.app_id, app_args
+            )
             time.sleep(1)
 
             # read the local state of the user to ensure it was updated correctly
-            local_state = read_local_state(client, account_addresses[i], TestSimpleElection.app_id)
-            self.assertEqual(i, local_state["voted"], f"Wrong vote in user's voted variable")
+            local_state = read_local_state(
+                client, account_addresses[i], TestSimpleElection.app_id
+            )
+            self.assertEqual(
+                i, local_state["voted"], f"Wrong vote in user's voted variable"
+            )
             time.sleep(1)
 
             # read the global state of app to ensure it was updated correctly
@@ -373,12 +427,14 @@ class TestSimpleElection(unittest.TestCase):
             for j in range(0, 2):
                 self.assertEqual(1 if i >= j else 0, global_state[f"VotesFor{j}"])
 
-            print("-------------------------------------------------------------------------------")
+            print(
+                "-------------------------------------------------------------------------------"
+            )
 
     def test_05_unapproved_cant_vote(self):
-        """ tests unapproved user trying to vote """
+        """tests unapproved user trying to vote"""
 
-        app_args = [b"vote", (0).to_bytes(8, 'big')]
+        app_args = [b"vote", (0).to_bytes(8, "big")]
         # ensure an error occurs when an unapproved user tries to vote
         self.assertRaises(
             Exception,
@@ -386,13 +442,15 @@ class TestSimpleElection(unittest.TestCase):
             client,
             account_private_keys[2],
             TestSimpleElection.app_id,
-            app_args
+            app_args,
         )
 
-        print("-------------------------------------------------------------------------------")
+        print(
+            "-------------------------------------------------------------------------------"
+        )
 
     def test_06_closeout(self):
-        """ test closeout functionality on approved user 1, note: this happens before the election end """
+        """test closeout functionality on approved user 1, note: this happens before the election end"""
 
         print(f"Testing close out of account {account_addresses[1]}")
         # close out of the app (note this is happening before the election end)
@@ -405,11 +463,11 @@ class TestSimpleElection(unittest.TestCase):
         self.assertEqual(0, global_state[f"VotesFor{1}"])  # used to be 1, now is 0
 
     def test_99_delete_app(self):
-        """ delete the app as cleanup to not take up the creator's account's maximum app limit """
+        """delete the app as cleanup to not take up the creator's account's maximum app limit"""
 
         print(f"Deleting app {TestSimpleElection.app_id}")
         delete_app(client, account_private_keys[0], TestSimpleElection.app_id)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

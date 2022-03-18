@@ -8,6 +8,7 @@ try {
 
 const algosdk = require("algosdk");
 
+// 
 // This will handle all algosdk, indexer, and AlgoSigner code
 class AlgoHandler {
   constructor() {
@@ -22,11 +23,11 @@ class AlgoHandler {
 
     // Setup the algod client using the secrets imported variable
     // TODO -----------------------------------------------------------------------------
-    this.algodClient = null;
+    this.algodClient = new algosdk.Algodv2(secrets.algodHeader, secrets.algodServer, "");
 
     // Setup the indexer client using the secrets imported variable
     // TODO -----------------------------------------------------------------------------
-    this.indexerClient = null;
+    this.indexerClient = new algosdk.Indexer(secrets.algodHeader, secrets.indexerServer, "");
   }
 
   /**
@@ -39,15 +40,20 @@ class AlgoHandler {
     let accounts = [];
 
     // Attempt to connect to AlgoSigner, note you will have to use the "await" keyword
-    // If this fails or an error occurs, return an empty array
-    // TODO -----------------------------------------------------------------------------
 
+    
+    try { 
+      await window.AlgoSigner.connect(); //is window necessary 
+    } catch (err) {     // If this fails or an error occurs, return an empty array
+      return []
+    }
 
     // Retrieve all the AlgoSigner accounts on the TestNet
+    let accountss = await window.AlgoSigner.accounts({ ledger: 'TestNet' });
+    Array.from(accountss).forEach(obj => { 
+      accounts.push(obj.address)
+    })
     // Note they may be in this format: [{address: "address1"}, {address: "address2"}, etc]
-    // TODO -----------------------------------------------------------------------------
-
-
     // Return the addresses in array format: ["address1", "address2", "address3", etc]
     return accounts;
   }
@@ -68,9 +74,11 @@ class AlgoHandler {
    */
   async getLatestRound() {
     // Retrieve the algod client status
+    let status = (await this.algodClient.status().do());
+    console.log("Algorand network status: %o", status)
     // Return the "last-round" value from that status
     // TODO -----------------------------------------------------------------------------
-    return 0;
+    return status['last-round'];
   }
 
   /** 
@@ -97,6 +105,7 @@ class AlgoHandler {
     // Use the algodClient to get the the app details
     // TODO -----------------------------------------------------------------------------
     let app = {};
+    app = await this.algodClient.getApplicationByID(appID).do()
 
     // The data might have a complex structure, feel free to console.log it to see the structure
 
@@ -155,7 +164,22 @@ class AlgoHandler {
 
     // Use this.indexerClient to find all the accounts who have appID associated with their account
     // TODO -----------------------------------------------------------------------------
-
+    let accountInfo = await this.indexerClient.searchAccounts().applicationID(appID).do();
+    Array.from(accountInfo.accounts).forEach(acc => { 
+      Array.from(acc['apps-local-state']).forEach(mini => { 
+        if (mini.id == appID) { 
+          allLocalStates[acc['address']] = {}
+          Array.from(mini['key-value']).forEach(kv => { 
+            let key = this.base64ToString(Object.values(kv)[0])
+            let value;
+            key === "can_vote" ? value = this.base64ToString(Object.values(kv)[1].bytes) : value = Object.values(kv)[1].uint
+            allLocalStates[acc['address']][key] = value
+          })
+        }
+      })
+    })
+    console.log(allLocalStates, '----------------\n', accountInfo)
+    //CHECK how to test this! AND HOW to do console.log with this
     // The resultant JavaScript object (dictionary) may have a complex structure
     // Try to console.log it out to see the structure
 
@@ -165,8 +189,6 @@ class AlgoHandler {
     // The actual values will also need to be decoded if they are bytes
     // If they are uints they do not need decoding
     // TODO -----------------------------------------------------------------------------
-
-    // Return your JavaScript object
     return allLocalStates;
   }
 
@@ -178,14 +200,24 @@ class AlgoHandler {
   async signAndSend(txn) {
     // Transactions will need to be encoded to Base64. AlgoSigner has a builtin method for this
     // TODO -----------------------------------------------------------------------------
-
-
+    let binaryTx = txn.toByte();
+    let base64Tx = window.AlgoSigner.encoding.msgpackToBase64(binaryTx);
     // Sign the transaction with AlgoSigner
     // TODO -----------------------------------------------------------------------------
-
+    let signedTxs = await window.AlgoSigner.signTxn([
+      {
+        txn: base64Tx,
+      },
+    ]);
 
     // Send the message with AlgoSigner
     // TODO -----------------------------------------------------------------------------
+    let binarySignedTx = window.AlgoSigner.encoding.base64ToMsgpack(signedTxs[0].blob); //convert or not? 
+    await this.algodClient.sendRawTransaction(binarySignedTx).do();
+  //   await window.AlgoSigner.send({
+  //     ledger: LEDGER_NAME,
+  //     tx: signedTxs,
+  // });
   }
 
   /** 
@@ -197,13 +229,13 @@ class AlgoHandler {
   async optInAccount(address, appID) {
     // Get the suggested params for the transaction
     // TODO -----------------------------------------------------------------------------
-
+    let params = await this.algodClient.getTransactionParams().do();
     // Create the transaction to opt in
     // TODO -----------------------------------------------------------------------------
-
+    let txn = algosdk.makeApplicationOptInTxn(address, params, appID);
     // Sign and send the transaction with our this.signAndSend function
     // TODO -----------------------------------------------------------------------------
-
+    this.signAndSend(txn)
   }
 
   /** 
@@ -218,7 +250,7 @@ class AlgoHandler {
   async updateUserStatus(creatorAddress, userAddress, yesOrNo, appID) {
     // Get the suggested params for the transaction
     // TODO -----------------------------------------------------------------------------
-
+    let params = await this.algodClient.getTransactionParams().do();
     // Setup the application argument array, note that application arguments need to be encoded
     // Strings need to be encoded into Uint8Array
     // Addresses, *only* when passed as *arguments*, need to be decoded with algosdk inbuilt 
@@ -226,15 +258,21 @@ class AlgoHandler {
     // The first argument should be the identifier of the smart contract method.
     // In this case the identifier is "update_user_status"
     // TODO -----------------------------------------------------------------------------
-
+    let method_identifier = "update_user_status"
+    let app_args = [
+      new Uint8Array(method_identifier),
+      new Uint8Array(algosdk.decodeAddress(userAddress)),
+      new Uint8Array(Buffer.from(yesOrNo))
+    ]
     // Create the transaction with proper app argument array
     // For this application transaction make sure to include the optional array of accounts 
     // including both the creator's account and also the user's account 
     // (both in regular string format, algosdk automatically converts these when used this way)
     // TODO -----------------------------------------------------------------------------
-
+    let txn = algosdk.makeApplicationNoOpTxn(creatorAddress, params, appID, app_args, [creatorAddress, userAddress])
     // Sign and send the transaction with our this.signAndSend function
     // TODO -----------------------------------------------------------------------------
+    this.signAndSend(txn)
   }
 
   /** 
@@ -249,6 +287,14 @@ class AlgoHandler {
     // The first argument should be the identifier of the smart contract method.
     // In this case the identifier is "vote"
     // TODO -----------------------------------------------------------------------------
+    let params = await this.algodClient.getTransactionParams().do();
+    let method_identifier = "vote"
+    let app_args = [
+      new Uint8Array(method_identifier),
+      algosdk.encodeUint64(optionIndex)
+    ]
+    let txn = algosdk.makeApplicationNoOpTxn(address, params, appID, app_args) //CHECK SHOULD I USE NOOP
+    this.signAndSend(txn)
   }
 
   /** 
@@ -259,6 +305,10 @@ class AlgoHandler {
    */
   async closeOut(address, appID) {
     // TODO -----------------------------------------------------------------------------
+    let params = await this.algodClient.getTransactionParams().do();
+    let app_args = []
+    let txn = algosdk.makeApplicationNoOpTxn(address, params, appID, app_args)
+    this.signAndSend(txn)
   }
 
   /** 
@@ -269,6 +319,10 @@ class AlgoHandler {
    */
   async clearState(address, appID) {
     // TODO -----------------------------------------------------------------------------
+    let params = await this.algodClient.getTransactionParams().do();
+    let app_args = []
+    let txn = algosdk.makeApplicationNoOpTxn(address, params, appID, app_args)
+    this.signAndSend(txn)
   }
 }
 

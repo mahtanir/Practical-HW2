@@ -2,8 +2,16 @@ from algosdk.future import transaction
 from algosdk import account, mnemonic
 from algosdk.v2client import algod
 from secrets import account_mnemonics, algod_address, algod_headers
-from election_params import local_ints, local_bytes, global_ints, global_bytes, relative_election_end, num_vote_options, vote_options #CHECK THIS
-from helper import compile_program, read_global_state
+from elections_params import (
+    local_ints,
+    local_bytes,
+    global_ints,
+    global_bytes,
+    relative_election_end,
+    num_vote_options,
+    vote_options,
+)  # CHECK THIS
+from helper import compile_program, read_global_state, wait_for_confirmation
 from pyteal import compileTeal, Mode
 from election_smart_contract import (
     clear_state_program,
@@ -67,8 +75,10 @@ def create_app(
 
     return app_id
 
+
 def intToBytes(i):
     return i.to_bytes(8, "big")
+
 
 def create_vote_app(
     client, creator_private_key, election_end, num_vote_options, vote_options
@@ -84,7 +94,9 @@ def create_vote_app(
         approval_program_ast, mode=Mode.Application, version=5
     )
     # compile program to binary
-    approval_program_compiled = compile_program(client, approval_program_teal) #CHECK: client is this right
+    approval_program_compiled = compile_program(
+        client, approval_program_teal
+    )  # CHECK: client is this right
 
     # Do the same for PyTeal clear state program
 
@@ -95,16 +107,14 @@ def create_vote_app(
         clear_state_program_ast, mode=Mode.Application, version=5
     )
     # compile program to binary
-    clear_state_program_compiled = compile_program(
-        client, clear_state_program_teal
-    )
+    clear_state_program_compiled = compile_program(client, clear_state_program_teal)
 
     # TODO: Create list of bytes for application arguments and create new application.
-     app_args = [
+    app_args = [
         intToBytes(election_end),
         intToBytes(num_vote_options),
-        Bytes(num_vote_options) #CHECK should I enclose with Bytes()  or no need
-    ]
+        Bytes(vote_options),
+    ]  # CHECK should I enclose with Bytes()  or no need]
 
     # create new application
     app_id = create_app(
@@ -123,17 +133,30 @@ def create_vote_app(
 def main():
     # TODO: Initialize algod client and define absolute election end time fom the status of the last round.
     # initialize an algodClient
-    algod_client = algod.AlgodClient(algod_headers["X-API-Key"], algod_address)
+    algod_client = algod.AlgodClient(
+        algod_token="", algod_address=algod_address, headers=algod_headers
+    )
     # configure registration and voting period
     status = algod_client.status()
-    election_end = status["last-round"] + relative_election_end
-     # read global state of application
+    election_end = (
+        status["last-round"] + relative_election_end
+    )  # if I switch to plus then does this mean I just take it as abss in election_smart?
+    # read global state of application
 
     # TODO: Deploy the app and print the global state.
-    app_id = create_vote_app(algod_client, account_private_keys[0], election_end, num_vote_options, vote_options) 
-    #is this right CHECK for params and does this constitue deploying or do I need all the other functions also very confused
-    print("Global state:", read_global_state(algod_client, app_id))
+    try:
+        app_id = create_vote_app(
+            algod_client,
+            account_private_keys[0],
+            election_end,
+            num_vote_options,
+            vote_options,
+        )
+        print("Global state:", read_global_state(algod_client, app_id))
+    except Exception as error:
+        print("FAILED", error)
 
+    # is this right CHECK for params and does this constitue deploying or do I need all the other functions also very confused
     pass
 
 
